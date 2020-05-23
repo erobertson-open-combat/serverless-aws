@@ -1,0 +1,88 @@
+service: open-combat
+
+#
+#   Providers
+#
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  environment:
+    DOMAIN_SUFFIX: eric-robertson
+  httpApi:
+    authorizers:
+      serviceAuthorizer:
+        identitySource: $request.header.Authorization
+        issuerUrl: 
+          Fn::Join:
+          - ''
+          - - 'https://cognito-idp.'
+            - '${opt:region, self:provider.region}'
+            - '.amazonaws.com/'
+            - Ref: serviceUserPool
+        audience:
+          - Ref: serviceUserPoolClient
+
+#
+#   Lambda Functions
+#
+
+functions:
+  getProfileInfo:
+    handler: profile.test
+    events:
+      - httpApi:
+            method: GET
+            path: /user/profile
+            authorizer: serviceAuthorizer
+#
+#   Resources
+#
+
+resources:
+  Resources:
+    HttpApi:
+      DependsOn: serviceUserPool
+    serviceUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: open-combat-userpool
+        UsernameAttributes:
+          - email
+        Schema:
+          - Name: nickname
+            Required: true
+            AttributeDataType: String
+            StringAttributeConstraints:
+              MinLength: 3
+              MaxLength: 20
+            Mutable: false
+    serviceUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: open-combat-userpoolclient
+        AllowedOAuthFlows:
+          - implicit
+        AllowedOAuthFlowsUserPoolClient: true
+        AllowedOAuthScopes:
+          - phone
+          - email
+          - openid
+          - profile
+          - aws.cognito.signin.user.admin
+        UserPoolId:
+          Ref: serviceUserPool
+        CallbackURLs: 
+          - https://localhost:3000
+        ExplicitAuthFlows:
+          - ALLOW_USER_SRP_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+        GenerateSecret: false
+        SupportedIdentityProviders: 
+          - COGNITO
+    serviceUserPoolDomain:
+      Type: AWS::Cognito::UserPoolDomain 
+      Properties:
+        UserPoolId: 
+          Ref: serviceUserPool
+        Domain: open-combat-userpooldomain
